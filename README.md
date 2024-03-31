@@ -1,4 +1,4 @@
-# Bank Card Detection System
+# Bank Card Detection application
 
 This repository contains the source code for a system designed to detect bank cards in images. The system leverages OpenCV, a powerful open-source computer vision and machine learning software library, to process images, identify rectangular shapes that match the dimensions of a standard bank card, and highlight these detections within the image.
 
