@@ -2,11 +2,11 @@
 #include <iostream>
 
 class PartRectangle {
-public:									//	._______.										
+public:							//	._______.										
 	cv::Vec4i parallelLine1;			//	.		.
 	cv::Vec4i parallelLine2;			//	|		|
-	cv::Vec4i perpendicularLine;		//	|		|
-	//	.		.
+	cv::Vec4i perpendicularLine;			//	|		|
+							//	.		.
 
 	PartRectangle(const cv::Vec4i& l1, const cv::Vec4i& l2, const cv::Vec4i& l3)
 		: parallelLine1(l1), parallelLine2(l2), perpendicularLine(l3) {
