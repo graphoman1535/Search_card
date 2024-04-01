@@ -12,7 +12,8 @@ This repository contains the source code for a system designed to detect bank ca
 
 ## Classes and Functions
 
-### `PartRectangle`
+### `partRectangle`
+![Вид partRectangle](part_rectangle.jpg)
 
 Represents a partial structure of a rectangle, defined by two parallel lines and one perpendicular line.
 
