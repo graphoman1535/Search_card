@@ -1,6 +1,15 @@
 # Bank Card Detection application
 
 This repository contains the source code for a system designed to detect bank cards in images. The system leverages OpenCV, a powerful open-source computer vision and machine learning software library, to process images, identify rectangular shapes that match the dimensions of a standard bank card, and highlight these detections within the image.
+# Feature Point Detection
+
+The feature point in this task refers to the intersection of two perpendicular lines, which is not captured in the image after applying the Canny edge detector. This intersection point is crucial for understanding the geometrical structure within the image data.
+
+For a visual representation of this feature point, see the illustration below.
+
+*Illustration of the Feature Point:*
+
+![Feature Point Illustration](featurePoint.jpg)
 
 ## Features
 
@@ -11,7 +20,6 @@ This repository contains the source code for a system designed to detect bank ca
 - **Visualization**: Highlights detected bank cards in the original image.
 
 ## Classes and Functions
-
 ### `partRectangle`
 ![Вид partRectangle](part_rectangle.jpg)
 
