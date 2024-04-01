@@ -9,7 +9,7 @@ For a visual representation of this feature point, see the illustration below.
 
 *Illustration of the Feature Point:*
 
-![Feature Point Illustration](featurePoint.jpg)
+![Feature Point Illustration](featurePoint.png)
 
 ## Features
 
@@ -21,6 +21,7 @@ For a visual representation of this feature point, see the illustration below.
 
 ## Classes and Functions
 ### `partRectangle`
+*Illustration of the partRectangle:*
 ![Вид partRectangle](part_rectangle.jpg)
 
 Represents a partial structure of a rectangle, defined by two parallel lines and one perpendicular line.
@@ -45,6 +46,7 @@ Includes functions for line intersection detection, angle calculation between li
 
 ## Example of work
  **Results**: The program will process the provided image, attempting to detect and highlight bank cards based on the defined criteria.
+ **Illustration of result**
  ![Standart](result1.jpg)
  ![card is rotated](result2.jpg)
  
