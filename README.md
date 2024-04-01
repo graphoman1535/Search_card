@@ -35,10 +35,8 @@ Includes functions for line intersection detection, angle calculation between li
 - OpenCV 4.x
 - C++ Compiler with C++11 support
 
-## Usage
-
-1. **Compilation**: Ensure OpenCV is correctly installed and linked in your development environment. Compile the source code with your C++ compiler, linking against OpenCV libraries.
-
-2. **Running**: Execute the compiled program, providing a path to the target image as an argument or modifying the source code to point to your target image.
-
-3. **Results**: The program will process the provided image, attempting to detect and highlight bank cards based on the defined criteria.
+## Example of work
+ **Results**: The program will process the provided image, attempting to detect and highlight bank cards based on the defined criteria.
+ ![Standart](result1.jpg)
+ ![card is rotated](result2.jpg)
+ 
