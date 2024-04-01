@@ -9,7 +9,7 @@ For a visual representation of this feature point, see the illustration below.
 
 *Illustration of the Feature Point:*
 
-![Feature Point Illustration](featurePoint.png)
+![Feature Point Illustration](m_featurePoint.png)
 
 ## Features
 
