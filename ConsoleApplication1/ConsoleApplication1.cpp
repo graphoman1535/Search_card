@@ -1,10 +1,35 @@
-﻿#include <opencv2/opencv.hpp>
+#include <opencv2/opencv.hpp>
 #include <iostream>
 
+class PartRectangle {
+public:									//	._______.										
+	cv::Vec4i parallelLine1;			//	.		.
+	cv::Vec4i parallelLine2;			//	|		|
+	cv::Vec4i perpendicularLine;		//	|		|
+	//	.		.
+
+	PartRectangle(const cv::Vec4i& l1, const cv::Vec4i& l2, const cv::Vec4i& l3)
+		: parallelLine1(l1), parallelLine2(l2), perpendicularLine(l3) {
+	}
+};
+
+class Rectangle
+{
+public:
+	cv::Vec4i line1;
+	cv::Vec4i line2;
+	cv::Vec4i line3;
+	cv::Vec4i line4;
 
 
+	Rectangle(const cv::Vec4i& l1, const cv::Vec4i& l2, const cv::Vec4i& l3, const cv::Vec4i& l4)
+		:line1(l1), line2(l2), line3(l3), line4(l4) {
+
+	}
+};
+
+bool isRectangle(PartRectangle condidat1, PartRectangle condidat2);
 int  findIntersectionPoint(cv::Vec4f line1, cv::Vec4f line2, cv::Point* crossPoint);
-void drawline(cv::Mat img, cv::Vec2f line);
 void drawline(cv::Mat img, cv::Vec4f line);
 double calculateAngleBetweenLines(cv::Vec4f line1, cv::Vec4f line2);
 int isIntersection(cv::Vec4i line1, cv::Vec4i line2);
@@ -14,12 +39,26 @@ double pointToLineDistance(double x, double y, double A, double B, double C);
 bool isSegmentBetweenPoints(cv::Vec4i segment, cv::Point pt1, cv::Point pt2);
 int orientation(cv::Point pt, cv::Vec4i line);
 int distanceSquared(const cv::Point& p1, const cv::Point& p2);
-bool isCard(const std::vector<cv::Point>& points);
+bool areParallelBetweenPerpendiculars(const cv::Vec4i& parallel1, const cv::Vec4i& parallel2,
+	const cv::Vec4i& perpendicular1, const cv::Vec4i& perpendicular2);
+double segmentLength(const cv::Vec4i& segment);
 
+void filterLines(std::vector<cv::Vec4i>& lines, cv::Mat& img);
+
+void findFeaturePoints(std::vector<cv::Vec4i>& lines, cv::Mat& img, cv::Mat& cany_res, std::vector<cv::Point>& feature_points, std::vector<cv::Vec4i>& lines1_for_point, std::vector<cv::Vec4i>& lines2_for_point);
+
+
+
+
+void findPartRectangle(std::vector<cv::Point>& feature_points, std::vector<cv::Vec4i>& lines1_for_point, std::vector<cv::Vec4i>& lines2_for_point, std::vector<PartRectangle>& condidates);
+
+void findCards(std::vector<PartRectangle>& condidates, std::vector<Rectangle>& cards);
 
 int main(int argc, char** argv) {
 	// Загрузка изображения
-	cv::Mat img = cv::imread("../im3.jpg");
+	
+	cv::Mat img_original = cv::imread("../im1.jpg");//argv[1] 
+	cv::Mat img = img_original.clone();
 	if (img.empty()) {
 		std::cout << "Image Not Found!!!" << std::endl;
 		return -1;
@@ -29,6 +68,7 @@ int main(int argc, char** argv) {
 	int new_height = cvRound(img.rows * scale_factor);
 	int new_width = cvRound(img.cols * scale_factor);
 	cv::resize(img, img, cv::Size(new_width, new_height));
+	cv::resize(img_original, img_original, cv::Size(new_width, new_height));
 
 	// Уменьшение шума
 	GaussianBlur(img, img, cv::Size(7, 7), 1.5);
@@ -40,12 +80,204 @@ int main(int argc, char** argv) {
 	// Применение детектора границ Canny
 	cv::Mat cany_res;
 	Canny(gray, cany_res, 50, 150);
-	//cv::imwrite("cany.jpg", cany_res);
 
-// Вероятностный Хофф
+	// Вероятностный Хофф
 	std::vector<cv::Vec4i> lines;
 	cv::HoughLinesP(cany_res, lines, 2, CV_PI / 180, 75, 30, 15);
 
+	filterLines(lines, img);
+
+	std::vector<cv::Vec4i> lines1_for_point;
+	std::vector<cv::Vec4i> lines2_for_point;
+	std::vector<cv::Point> feature_points;
+	// ищем точки персечения прямых, которые пересекаются под прямым углом 
+	findFeaturePoints(lines, img, cany_res, feature_points, lines1_for_point, lines2_for_point);
+
+
+	std::vector < PartRectangle > condidates;
+	findPartRectangle(feature_points, lines1_for_point, lines2_for_point, condidates);
+
+
+	std::vector<Rectangle> cards;
+
+	//выберем прямоугольники прямоугольники.
+	findCards(condidates, cards);
+
+
+	//Рисуем карточки 
+	for (int i = 0; i < cards.size(); i++)
+	{
+
+		drawline(img_original, cards[i].line1);
+		drawline(img_original, cards[i].line2);
+		drawline(img_original, cards[i].line3);
+		drawline(img_original, cards[i].line4);
+	}
+	cv::imshow("RESULT", img_original);
+	cv::waitKey(0);
+	//вернем к исходному размеру и сохраним.
+	scale_factor = 1 / 0.2;
+	new_height = cvRound(img.rows * scale_factor);
+	new_width = cvRound(img.cols * scale_factor);
+	cv::resize(img_original, img_original, cv::Size(new_width, new_height));
+	cv::imwrite("result.jpg", img_original);
+
+
+	return 0;
+}
+
+void findCards(std::vector<PartRectangle>& condidates, std::vector<Rectangle>& cards)
+{
+	for (int i = 0; i < condidates.size(); i++)
+	{
+		for (int j = i + 1; j < condidates.size(); j++) {
+			if (isRectangle(condidates[i], condidates[j])) {
+				cv::Vec4i line1(condidates[i].perpendicularLine);
+				cv::Vec4i line2;
+				cv::Vec4i line3(condidates[j].perpendicularLine);
+				cv::Vec4i line4;
+
+				cv::Point pt1(condidates[i].perpendicularLine[0], condidates[i].perpendicularLine[1]);
+				cv::Point pt2(condidates[i].perpendicularLine[2], condidates[i].perpendicularLine[3]);
+				cv::Point pt3(condidates[j].perpendicularLine[0], condidates[j].perpendicularLine[1]);
+				cv::Point pt4(condidates[j].perpendicularLine[2], condidates[j].perpendicularLine[3]);
+
+				int dist1 = distanceSquared(pt1, pt3);
+				int dist2 = distanceSquared(pt1, pt4);
+				if (dist1 >= dist2)
+					line2 = cv::Vec4i(pt1.x, pt1.y, pt4.x, pt4.y);
+				else if (dist1 < dist2)
+					line2 = cv::Vec4i(pt1.x, pt1.y, pt3.x, pt3.y);
+
+				dist1 = distanceSquared(pt2, pt3);
+				dist2 = distanceSquared(pt2, pt4);
+
+				if (dist1 >= dist2)
+					line4 = cv::Vec4i(pt2.x, pt2.y, pt4.x, pt4.y);
+				else if (dist1 < dist2)
+					line4 = cv::Vec4i(pt2.x, pt2.y, pt3.x, pt3.y);
+
+
+				Rectangle rect(line1, line2, line3, line4);
+				double ratio = segmentLength(line1) / segmentLength(line2);
+				if ((ratio > 1.5 && ratio < 1.62) || (ratio > 0.61 && ratio < 0.67))
+				{
+					bool card_eqaul = false;
+					for (int i = 0; i < cards.size(); i++)
+					{
+						card_eqaul = cards[i].line1 == line1 || cards[i].line1 == line2
+							|| cards[i].line1 == line3 || cards[i].line1 == line4;
+						if (card_eqaul)
+							break;
+					}
+					if (!card_eqaul)
+						cards.push_back(rect);
+				}
+
+			}
+		}
+	}
+}
+
+void findPartRectangle(std::vector<cv::Point>& feature_points, std::vector<cv::Vec4i>& lines1_for_point, std::vector<cv::Vec4i>& lines2_for_point, std::vector<PartRectangle>& condidates)
+{
+	for (size_t i = 0; i < feature_points.size(); ++i) {
+		for (size_t j = i + 1; j < feature_points.size(); ++j) {
+
+			std::vector<cv::Vec4i> generatingLines = {
+				lines1_for_point[i], lines2_for_point[i], lines1_for_point[j],lines2_for_point[j] };
+			std::vector<int> number_line = { 0,1,2,3 }; // индексы generatingLines.
+
+			// есть ли среди образующих две точки общие прямых.
+			bool foundEqual = false;
+			for (size_t k = 0; k < generatingLines.size() && !foundEqual; ++k) {
+				for (size_t l = k + 1; l < generatingLines.size(); ++l) {
+					if (generatingLines[k] == generatingLines[l]) { // находим два угла с общей прямой 
+						foundEqual = true;
+
+						number_line.erase(number_line.begin() + std::max(k, l));
+						number_line.erase(number_line.begin() + std::min(k, l));
+
+						// проверим лежит ли образующий отрезок между точками. (У карточки обязательно лежит )
+						if (isSegmentBetweenPoints(generatingLines[k], feature_points[i], feature_points[j]))
+						{
+							int orient1 = orientation(feature_points[i], generatingLines[number_line[0]]);
+							int orient2 = orientation(feature_points[j], generatingLines[number_line[1]]);
+
+							if (orient1 == orient2) // не совпадающие прямые должны лежать по одну сторону от точек
+							{
+								cv::Vec4i parallelLine1 = generatingLines[number_line[0]];
+								cv::Vec4i parallelLine2 = generatingLines[number_line[1]];
+								cv::Vec4i perpendicularLine(feature_points[i].x, feature_points[i].y, feature_points[j].x, feature_points[j].y);
+
+								PartRectangle part_rect1(parallelLine1, parallelLine2, perpendicularLine);
+								condidates.push_back(part_rect1);
+							}
+							break;
+						}
+						break;
+					}
+				}
+			}
+		}
+	}
+}
+
+void findFeaturePoints(std::vector<cv::Vec4i>& lines, cv::Mat& img, cv::Mat& cany_res, //input
+	std::vector<cv::Point>& feature_points, std::vector<cv::Vec4i>& lines1_for_point, std::vector<cv::Vec4i>& lines2_for_point) //output
+{
+	double angle_tolerances = 3; //grad 
+	for (int i = 0; i < lines.size(); i++) {
+		for (int j = i + 1; j < lines.size(); j++) {
+			cv::Point crossPoint;
+			int property = findIntersectionPoint(lines[i], lines[j], &crossPoint);
+			if (property == -1)// прямые паралельны
+			{
+				continue;
+			}
+			// Проверка что точка пересечения в области картинки.
+			bool isInside = (crossPoint.x >= 0) && (crossPoint.x < img.cols) && (crossPoint.y >= 0) && (crossPoint.y < img.rows);
+
+			if (!isInside) {// точка вне изображения
+				continue;
+			}
+
+			// нужно чтобы прямые пересекались примерно под прямым углом
+			double angleBetweenLines = calculateAngleBetweenLines(lines[i], lines[j]);
+			if (angleBetweenLines > CV_PI / 2 + angle_tolerances * (CV_PI / 180) || angleBetweenLines < CV_PI / 2 - angle_tolerances * (CV_PI / 180))
+			{
+				continue;
+		    }
+
+			// Значение взвешенной суммы в окрестности 3x3 вокруг crossPoint
+			// для поиска потенциальных скругленных углов(карточки)
+			uchar weight_sum = 0;
+			for (int k = -1; k < 2; k++) {
+				for (int l = -1; l < 2; l++) {
+					int newX = crossPoint.x + k;
+					int newY = crossPoint.y + l;
+					weight_sum += cany_res.at<uchar>(newY, newX);
+				}
+			}
+
+			if (weight_sum == 0) {//Точки нет на картинке
+				for (int k = -1; k < 2; k++) {
+					for (int l = -1; l < 2; l++) {
+						int newX = crossPoint.x + k;
+						int newY = crossPoint.y + l;
+						cany_res.at<uchar>(newY, newX) = 255;
+					}
+				}
+				feature_points.push_back(crossPoint);
+				lines1_for_point.push_back(lines[i]);
+				lines2_for_point.push_back(lines[j]);
+			}
+		}
+	}
+}
+
+void filterLines(std::vector<cv::Vec4i>& lines, cv::Mat& img)
+{
 	// -Ищем пересекающися отрезки.	-----
 	std::set<int> indexes;
 	for (int i = 0; i < lines.size(); i++) {
@@ -64,6 +296,7 @@ int main(int argc, char** argv) {
 			lines.erase(lines.begin() + *it);
 		}
 	}
+
 	// удалим близкие отрезки. 
 	for (int i = 0; i < lines.size(); i++) {
 		for (int j = i; j < lines.size(); j++) {
@@ -88,7 +321,6 @@ int main(int argc, char** argv) {
 				continue;
 
 			}
-
 			// Проверка что точка пересечения в области картинки.
 			bool isInside = (crossPoint.x >= 0) && (crossPoint.x < img.cols) && (crossPoint.y >= 0) && (crossPoint.y < img.rows);
 
@@ -100,167 +332,57 @@ int main(int argc, char** argv) {
 			{
 				lines.erase(lines.begin() + j);
 			}
-
 		}
 	}
-
-	int counter1 = 0, counter2 = 0;
-
-	std::vector<cv::Vec4i> lines1_for_point;
-	std::vector<cv::Vec4i> lines2_for_point;
-	std::vector<cv::Point> future_points;
-	// ищем точки персечения прямых которые пересекаются под прямым углом 
-	for (int i = 0; i < lines.size(); i++) {
-		for (int j = i + 1; j < lines.size(); j++) {
-			cv::Point crossPoint;
-			int property = findIntersectionPoint(lines[i], lines[j], &crossPoint);
-			if (property == -1)// прямые паралельны
-			{
-				continue;
-			}
-			// Проверка что точка пересечения в области картинки.
-			bool isInside = (crossPoint.x >= 0) && (crossPoint.x < img.cols) && (crossPoint.y >= 0) && (crossPoint.y < img.rows);
-
-			if (!isInside) {// точка вне изображения
-				continue;
-			}
-
-			// нужно чтобы прямые пересекались примерно под прямым углом
-			double angleBetweenLines = calculateAngleBetweenLines(lines[i], lines[j]);
-			if (angleBetweenLines > CV_PI / 2 + 3 * (CV_PI / 180) || angleBetweenLines < CV_PI / 2 - 3 * (CV_PI / 180))
-			{
-				continue;
-			}
-
-			uchar weight_sum = 0;
-			for (int k = -1; k < 2; k++) {
-				for (int l = -1; l < 2; l++) {
-					int newX = crossPoint.x + k;
-					int newY = crossPoint.y + l;
-					weight_sum += cany_res.at<uchar>(newY, newX);
-				}
-			}
-
-			if (weight_sum == 0) {//Точки нет на картинке
-				for (int k = -1; k < 2; k++) {
-					for (int l = -1; l < 2; l++) {
-						int newX = crossPoint.x + k;
-						int newY = crossPoint.y + l;
-						cany_res.at<uchar>(newY, newX) = 255;
-					}
-				}
-				future_points.push_back(crossPoint);
-				lines1_for_point.push_back(lines[i]);
-				lines2_for_point.push_back(lines[j]);
-			}
-		}
-	}
-	
-	// посмотрим различные комбинации точек. Могут ли они образовывать прямоугольник 
-	std::set<int> index_points;
-
-	for (size_t i = 0; i < future_points.size(); ++i) {
-		for (size_t j = i + 1; j < future_points.size(); ++j) {
-
-			std::vector<cv::Vec4i> generatingLines = {
-				lines1_for_point[i], lines2_for_point[i], lines1_for_point[j],lines2_for_point[j] };
-
-			// есть ли среди образующих две точки общие прямых.
-			bool foundEqual = false;
-			for (size_t k = 0; k < generatingLines.size() && !foundEqual; ++k) {
-				for (size_t l = k + 1; l < generatingLines.size(); ++l) {
-					if (generatingLines[k] == generatingLines[l]) {
-						foundEqual = true;
-						std::vector<int> number_line = { 0,1,2,3 };
-						number_line.erase(number_line.begin() + std::max(k,l));
-					    number_line.erase(number_line.begin() + std::min(k,l));
-						
-						// проверим лежит ли образующий отрезок между точками. (У карточки обязательно лежит )
-						if (isSegmentBetweenPoints(generatingLines[k], future_points[i], future_points[j]))
-						{
-							int orient1 = orientation(future_points[i], generatingLines[number_line[0]]);
-							int orient2 = orientation(future_points[j], generatingLines[number_line[1]]);
-				
-							if (orient1 == orient2) // не совпадающие прямые должны лежать по одну сторону от точек
-							{
-								//double
-								//	dist_betwen_line = approximateDistanceBetweenAlmostParallelLines(generatingLines[number_line[0]], generatingLines[number_line[1]]),
-								//	real_dist =sqrt(distanceSquared(future_points[i], future_points[j]));
-								//std::cout <<"dist_betwen_line =" <<dist_betwen_line << std::endl;
-								//std::cout << "dist_betwen_points =" << real_dist << std::endl;
-								//
-								//if (fabs(dist_betwen_line -real_dist) < 2) { // расстояние между вершинами должно быть равно расстоянию между паралельными прямыми
-								//	index_points.insert(i);
-								//	index_points.insert(j);
-								//	break;
-								//}
-								index_points.insert(i);
-								index_points.insert(j);
-							}
-							break;
-						}
-						break;
-					}
-				}
-			}
-		}
-	}
-	std::cout << index_points.size() << std::endl;
-
-	for (std::set<int>::iterator it = index_points.begin(); it != index_points.end(); ++it) {
-		cv::circle(img, future_points[*it], 3, cv::Scalar(0, 255, 0), 1);
-		drawline(img, lines1_for_point[*it]);
-		drawline(img, lines2_for_point[*it]);
-	}
-	cv::imshow("please", img);
-	cv::waitKey(0);
-	std::vector<int> index_point_vec;//(index_points.begin(), index_points.end());
-
-	for (std::set<int>::iterator it = index_points.begin(); it != index_points.end(); ++it) {
-		index_point_vec.push_back(*it);
-	}
-
-
-	if (index_point_vec.size() != 4) {
-		//переберем всевозможные точки. Можно ли получить из них прямоугольник.
-		for (size_t i = 0; i < index_point_vec.size(); ++i) {
-			for (size_t j = i + 1; j < index_point_vec.size(); ++j) {
-				for (size_t k = j + 1; k < index_point_vec.size(); ++k) {
-					for (size_t l = k + 1; l < index_point_vec.size(); ++l) {
-
-						std::vector<cv::Point> vertex;
-						vertex.push_back(future_points[index_point_vec[i]]);
-						vertex.push_back(future_points[index_point_vec[j]]);
-						vertex.push_back(future_points[index_point_vec[k]]);
-						vertex.push_back(future_points[index_point_vec[l]]);
-						;
-						if (isCard(vertex)) {
-
-							circle(img,future_points[index_point_vec[i]], 3, cv::Scalar(0, 255, 0), 1);
-							circle(img,future_points[index_point_vec[j]], 3, cv::Scalar(0, 255, 0), 1);
-							circle(img,future_points[index_point_vec[k]], 3, cv::Scalar(0, 255, 0), 1);
-							circle(img,future_points[index_point_vec[l]], 3, cv::Scalar(0, 255, 0), 1);
-
-
-						}
-
-
-
-
-					}
-				}
-			}
-		}
-	}
-	//cv::imshow("please", img);
-	//cv::waitKey(0);
-
-
-	return 0;
 }
 
 //-------------------------------------------------------------------------
 // Вспомогательные функции.
+double segmentLength(const cv::Vec4i& segment) {
+	int x1 = segment[0];
+	int y1 = segment[1];
+	int x2 = segment[2];
+	int y2 = segment[3];
+
+	return std::sqrt(std::pow(x2 - x1, 2) + std::pow(y2 - y1, 2));
+}
+bool isRectangle(PartRectangle condidat1, PartRectangle condidat2) {
+
+	bool perpend_different = (condidat1.perpendicularLine != condidat2.perpendicularLine);
+	bool paralel_line_equal = (condidat1.parallelLine1 == condidat2.parallelLine1 && condidat1.parallelLine2 == condidat2.parallelLine2)
+		|| (condidat1.parallelLine1 == condidat2.parallelLine2 && condidat1.parallelLine2 == condidat2.parallelLine1);
+
+	bool orient = areParallelBetweenPerpendiculars(condidat1.parallelLine1, condidat1.parallelLine2,
+		condidat1.perpendicularLine, condidat2.perpendicularLine);
+
+	return perpend_different && paralel_line_equal && orient;
+}
+
+
+bool areParallelBetweenPerpendiculars(const cv::Vec4i& parallel1, const cv::Vec4i& parallel2,
+	const cv::Vec4i& perpendicular1, const cv::Vec4i& perpendicular2) {
+	// Преобразование координат в точки для параллельных отрезков
+	cv::Point p1Start(parallel1[0], parallel1[1]), p1End(parallel1[2], parallel1[3]);
+	cv::Point p2Start(parallel2[0], parallel2[1]), p2End(parallel2[2], parallel2[3]);
+
+	// Преобразование координат в точки для перпендикулярных отрезков
+	cv::Point perp1Start(perpendicular1[0], perpendicular1[1]), perp1End(perpendicular1[2], perpendicular1[3]);
+	cv::Point perp2Start(perpendicular2[0], perpendicular2[1]), perp2End(perpendicular2[2], perpendicular2[3]);
+
+	// Находим ограничивающие координаты для перпендикулярных отрезков
+	int minX = std::min({ perp1Start.x, perp1End.x, perp2Start.x, perp2End.x });
+	int maxX = std::max({ perp1Start.x, perp1End.x, perp2Start.x, perp2End.x });
+	int minY = std::min({ perp1Start.y, perp1End.y, perp2Start.y, perp2End.y });
+	int maxY = std::max({ perp1Start.y, perp1End.y, perp2Start.y, perp2End.y });
+
+	// Проверяем, лежат ли параллельные отрезки внутри ограничивающих координат
+	return (std::min(p1Start.x, p1End.x) >= minX && std::max(p1Start.x, p1End.x) <= maxX &&
+		std::min(p1Start.y, p1End.y) >= minY && std::max(p1Start.y, p1End.y) <= maxY) &&
+		(std::min(p2Start.x, p2End.x) >= minX && std::max(p2Start.x, p2End.x) <= maxX &&
+			std::min(p2Start.y, p2End.y) >= minY && std::max(p2Start.y, p2End.y) <= maxY);
+}
+
+
 int distanceSquared(const cv::Point& p1, const cv::Point& p2) {
 	return (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y);
 }
@@ -279,21 +401,16 @@ bool isCard(const std::vector<cv::Point>& points) {
 
 	std::sort(dists.begin(), dists.end());
 
-	bool isRectangle = (dists[0] - dists[1]<1)  && (dists[2] - dists[3] < 1) && (dists[4] - dists[5] < 1) && (dists[0] - dists[4] < 1);
+	bool isRectangle = (dists[0] - dists[1] < 1) && (dists[2] - dists[3] < 1) && (dists[4] - dists[5] < 1) && (dists[0] - dists[4] < 1);
 	if (!isRectangle) return false;
 
 	// Вычисляем соотношение сторон прямоугольника
 	double sideRatio = std::sqrt(static_cast<double>(dists[0]) / dists[2]);
 	std::cout << "sideRatio = " << sideRatio << std::endl;
-	if ( (sideRatio > 0.62 && sideRatio < 0.635))
+	if ((sideRatio > 0.62 && sideRatio < 0.66))
 		return true;
 	return false;
 }
-
-
-
-
-
 
 int orientation(cv::Point pt, cv::Vec4i line) {
 	cv::Point
@@ -302,10 +419,10 @@ int orientation(cv::Point pt, cv::Vec4i line) {
 
 	if (segRight.x - segLeft.x <= 2) // прямая вертикальная
 	{
-		if ( segRight.y <= pt.y) // прямая левее точки.
+		if (segRight.y <= pt.y) // прямая левее точки.
 			return -1;
 
-		else if ( segLeft.y >= pt.y) // прямая правее точки
+		else if (segLeft.y >= pt.y) // прямая правее точки
 			return 0;
 		else
 			return 1;
@@ -320,7 +437,6 @@ int orientation(cv::Point pt, cv::Vec4i line) {
 		else
 			return 1;
 	}
-
 
 
 	if (segRight.x <= pt.x && segRight.y <= pt.y) // прямая левее точки.
@@ -505,16 +621,4 @@ int findIntersectionPoint(cv::Vec4f line1, cv::Vec4f line2, cv::Point* crossPoin
 void drawline(cv::Mat img, cv::Vec4f line) {
 	cv::Vec4i l = line;
 	cv::line(img, cv::Point(l[0], l[1]), cv::Point(l[2], l[3]), cv::Scalar(255, 255, 255), 1, cv::LINE_8);
-}
-
-void drawline(cv::Mat img, cv::Vec2f line) {
-	float rho = line[0], theta = line[1];
-	cv::Point pt1, pt2;
-	double a = cos(theta), b = sin(theta);
-	double x0 = a * rho, y0 = b * rho;
-	pt1.x = cvRound(x0 + 1000 * (-b));
-	pt1.y = cvRound(y0 + 1000 * (a));
-	pt2.x = cvRound(x0 - 1000 * (-b));
-	pt2.y = cvRound(y0 - 1000 * (a));
-	cv::line(img, pt1, pt2, cv::Scalar(255, 255, 255), 1, cv::LINE_8);
 }
